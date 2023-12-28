@@ -5,7 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDK | @Model.Title</title>
-    <link rel="icon" type="image/jpg" href="@Model.jsonSteam.avatarfull" />
+    @if(Model.jsonSteam != null){
+        <link rel="icon" type="image/jpg" href="Model.jsonSteam.avatarfull" />
+    }else{
+        <link rel="icon" type="image/jpg" href="https://freepngimg.com/save/97432-logo-chat-photos-download-free-image/512x512" />
+    }
 </head>
 
 <body>
@@ -155,11 +159,10 @@
 
             init();
 
-            const btnExit = document.querySelector('#exit');
-            btnExit.onclick = function () {
-                document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-                // location.reload();
-            };
+            document.getElementById('exit').addEventListener('click', function() {
+                document.cookie = 'access_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                window.location.reload();
+            });
         })();
     </script>
     }

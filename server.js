@@ -177,7 +177,7 @@ app.get('/api/auth/steam/return', passport.authenticate('steam', {failureRedirec
     // JWT уже установлен в профиле пользователя
     let currentDate = new Date();
     currentDate.setMonth(currentDate.getMonth() + 1);
-    res.cookie('access_token', req.user.accessToken, { httpOnly: true, secure: true, expires: currentDate });
+    res.cookie('access_token', req.user.accessToken, { httpOnly: false, secure: true, expires: currentDate });
     res.redirect('/');
 });
 
