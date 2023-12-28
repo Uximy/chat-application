@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDK | @Model.Title</title>
     @if(Model.jsonSteam != null){
-        <link rel="icon" type="image/jpg" href="Model.jsonSteam.avatarfull" />
+        <link rel="icon" type="image/jpg" href="@Model.jsonSteam.avatarfull" />
     }else{
         <link rel="icon" type="image/jpg" href="https://freepngimg.com/save/97432-logo-chat-photos-download-free-image/512x512" />
     }
