@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDK | @Model.Title</title>
+    <link rel="icon" type="image/jpg" href="@Model.jsonSteam.avatarfull" />
 </head>
 
 <body>
@@ -14,6 +15,11 @@
             flex-direction: row;
             align-items: center;
             font-size: 17px;
+        }
+        .nickname{
+            text-decoration: none;
+            color: black;
+            margin-left: 15px;
         }
     </style>
 
@@ -45,9 +51,9 @@
         <h1>Чат в онлайн режиме</h1>
         <pre id="messages" style="height: 400px;overflow-y: scroll;display: flex;flex-direction: column;gap: 20px;"></pre>
             @if(steam != null) {
-                <input type="text" id="messageBox" placeholder="Type your message here"
+                <input type="text" id="messageBox" placeholder="Пишите ваше сообщение здесь"
                 style="display: block; width: 96vw; margin-bottom: 10px; padding: 10px;" />
-                <button id="send" title="Send Message!" style="width: 100%; height: 30px;">Send Message</button>
+                <button id="send" title="Отправить сообщение!" style="width: 100%; height: 30px;">Отправить сообщение</button>
             }else{
                 <a href="https://localhost:3000/api/auth/steam" style="display: inline-block; width: 100%; height: 30px; text-align: center;">Авторизуйтесь через Steam чтобы написать сообщение</a>
             }
@@ -60,10 +66,11 @@
         function showHistoryMessage() {
                 messages.innerHTML += `
                 @for(var i = 0; i < history.length; i++){
+                    var steamid = history[i].steamid;
                     var nickname = history[i].nickname;
                     var img = history[i].img;
                     var messages = history[i].messages;
-                    <div class="message"><img width="50px" style="border-radius: 15px" src="@img" alt="@nickname"> @nickname: @messages</div>
+                    <div class="message"><img width="50px" style="border-radius: 15px" src="@img" alt="@nickname"> <a class="nickname" href="https://steamcommunity.com/profiles/@steamid/" target="_blank">@nickname</a>: @messages</div>
                 }
                 `;
                 messages.scrollTop = messages.scrollHeight;
@@ -91,7 +98,7 @@
                 let nickname = data.nickname;
                 let img = data.img;
                 let message = data.messages;
-                messages.innerHTML += `<div class="message"><img width="50px" style="border-radius: 15px" src="${img}" alt="${nickname}"> ${nickname}: ${message}</div>`;
+                messages.innerHTML += `<div class="message"><img width="50px" style="border-radius: 15px" src="${img}" alt="${nickname}"> <a href="https://steamcommunity.com/id/${nickname}">${nickname}</a>: ${message}</div>`;
                 messages.scrollTop = messages.scrollHeight;
                 messageBox.value = '';
             }

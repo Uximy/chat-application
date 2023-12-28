@@ -156,7 +156,7 @@ app.get('/', authenticateToken, async (req, res) => {
             const response = await axios.get(steamApiUrl);
             profile.push(response.data.response.players[0]);
         }
-
+        
         let model = {
             Title: "Test Room",
             jsonSteam: profile.length > 0 ? profile[0] : null,
