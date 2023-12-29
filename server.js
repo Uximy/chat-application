@@ -15,7 +15,6 @@ const https = require('https'),
 
 const config = require('./config.json');
 
-
 const pool = mysql.createPool({
     host: "localhost",
     user: "root",
@@ -87,33 +86,67 @@ const server = https.createServer({
 
 const wss = new WebSocket.Server({ server });
 
+const activeUsers = new Set();
+
 wss.on('connection', function connection(ws) {
+    ws.isClosing = false;
+
     ws.on('message', async function incoming(data) {
         // Преобразование данных из Buffer в объект JavaScript
         const b = Buffer.from(data);
         const obj = JSON.parse(b.toString());
 
-        // Сохраняем сообщение в базу данных один раз
-        try {
-            const sql = "INSERT INTO message_history (steamid, nickname, img, messages) VALUES(?, ?, ?, ?)";
-            await query(sql, [obj.steamid, obj.nickname, obj.img, obj.messages]);
-        } catch (error) {
-            console.error("Ошибка при отправке данных в базу данных: ", error);
+        if (obj.action === 'pre_logout') {
+            ws.isClosing = true;
+            ws.closingSteamID = obj.steamid;
         }
 
-        // После сохранения сообщения в базе данных, отправляем его всем подключенным клиентам
-        wss.clients.forEach(function each(client) {
+        // Отправка текущего списка пользователей в сети новому клиенту
+        if (obj.action.steamid != null) {
+            activeUsers.add(obj.action.steamid); // Добавляем пользователя в список активных
+            broadcastActiveUsers(); // Отправляем обновленный список всем пользователям
+        }
+
+        if(obj.action == null) {
+            // Сохраняем сообщение в базу данных один раз
             try {
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
-                    client.send(b.toString());
-                }
+                const sql = "INSERT INTO message_history (steamid, nickname, img, messages) VALUES(?, ?, ?, ?)";
+                await query(sql, [obj.steamid, obj.nickname, obj.img, obj.messages]);
             } catch (error) {
-                console.error("Ошибка при отправке сообщения клиенту: ", error);
+                console.error("Ошибка при отправке данных в базу данных: ", error);
+            }
+
+            wss.clients.forEach(function each(client) {
+                try {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(b.toString());
+                    }
+                } catch (error) {
+                    console.error("Ошибка при отправке сообщения клиенту: ", error);
+                }
+            });
+        }
+       
+    });
+
+    ws.on('close', function() {
+        if (ws.isClosing) {
+            console.log(`Пользователь с SteamID ${ws.closingSteamID} закрывает соединение`);
+            if(ws.closingSteamID != null){
+                activeUsers.delete(ws.closingSteamID);
+                broadcastActiveUsers();
+            }
+        }
+    });
+
+    function broadcastActiveUsers() {
+        // Формируем список активных пользователей и отправляем его всем подключенным клиентам
+        wss.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ action: 'updateUsers', users: Array.from(activeUsers) }));
             }
         });
-
-        
-    })
+    }
 })
 
 async function authenticateToken(req, res, next) {
