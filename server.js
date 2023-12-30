@@ -15,7 +15,6 @@ const https = require('https'),
 
 const config = require('./config.json');
 
-
 const pool = mysql.createPool({
     host: "localhost",
     user: "root",
@@ -25,6 +24,7 @@ const pool = mysql.createPool({
     connectionLimit: 10,
     queueLimit: 0
 }); 
+
 
 const query = (sql, values) => {
     return new Promise((resolve, reject) => {
@@ -47,7 +47,7 @@ passport.deserializeUser((user, done) => {
 
 // Initiate Strategy
 passport.use(new SteamStrategy({
-    returnURL: `https://${config.hostname}:${config.port}/api/auth/steam/return`,
+    returnURL: `https://localhost:${config.port}/api/auth/steam/return`,
     realm: `https://${config.hostname}:${config.port}/`,
     apiKey: config.apiKey
     }, function (identifier, profile, done) {
@@ -87,33 +87,89 @@ const server = https.createServer({
 
 const wss = new WebSocket.Server({ server });
 
+const activeUsers = new Map();
+
 wss.on('connection', function connection(ws) {
+    ws.isClosing = false;
+
     ws.on('message', async function incoming(data) {
         // Преобразование данных из Buffer в объект JavaScript
         const b = Buffer.from(data);
         const obj = JSON.parse(b.toString());
 
-        // Сохраняем сообщение в базу данных один раз
-        try {
-            const sql = "INSERT INTO message_history (steamid, nickname, img, messages) VALUES(?, ?, ?, ?)";
-            await query(sql, [obj.steamid, obj.nickname, obj.img, obj.messages]);
-        } catch (error) {
-            console.error("Ошибка при отправке данных в базу данных: ", error);
+        if (obj.action === 'logout') {
+            ws.isClosing = true;
+            ws.closingSteamID = obj.steamid;
         }
 
-        // После сохранения сообщения в базе данных, отправляем его всем подключенным клиентам
-        wss.clients.forEach(function each(client) {
+        //отправка сообщений на сторону клиента и в базу данных для сохранения истории сообщений
+        if(obj.action == null) {
+            // Сохраняем сообщение в базу данных один раз
             try {
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
-                    client.send(b.toString());
-                }
+                const sql = "INSERT INTO message_history (steamid, nickname, img, messages) VALUES(?, ?, ?, ?)";
+                await query(sql, [obj.steamid, obj.nickname, obj.img, obj.messages]);
             } catch (error) {
-                console.error("Ошибка при отправке сообщения клиенту: ", error);
+                console.error("Ошибка при отправке данных в базу данных: ", error);
+            }
+
+            wss.clients.forEach(function each(client) {
+                try {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(b.toString());
+                    }
+                } catch (error) {
+                    console.error("Ошибка при отправке сообщения клиенту: ", error);
+                }
+            });
+        }
+
+        // Отправка текущего списка пользователей в сети новому клиенту
+        if (obj.action != null && obj.action.steamid != null) {
+            // Функция для обработки данных пользователя
+            function handleUserAction() {
+                let steamid = obj.action.steamid;
+                const userInfo = {
+                    "nickname": obj.action.nickname,
+                    "img": obj.action.img
+                };
+            
+                // Обновляем данные пользователя, если он уже существует,
+                // или добавляем нового пользователя, если его нет в списке
+                activeUsers.set(steamid, userInfo);
+            }
+            
+            // Пример использования функции
+            handleUserAction();
+            broadcastActiveUsers(); // Отправляем обновленный список всем пользователям
+        }
+       
+    });
+
+    ws.on('close', function() {
+        if (ws.isClosing) {
+            // console.log(`Пользователь с SteamID ${ws.closingSteamID} закрывает соединение`);
+            if(ws.closingSteamID != null){
+                activeUsers.delete(ws.closingSteamID);
+                broadcastActiveUsers();
+            }
+        }
+    });
+
+    function broadcastActiveUsers() {
+        // Формируем список активных пользователей и отправляем его всем подключенным клиентам
+        wss.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+                //создаём массив из пользователей
+                const usersArray = Array.from(activeUsers).map(([steamid, userInfo]) => [steamid, userInfo]);
+
+                // Сортируем по никнейму
+                usersArray.sort((a, b) => a[1].nickname.localeCompare(b[1].nickname));
+
+                // Отправляем отсортированный массив клиенту
+                client.send(JSON.stringify({ action: 'updateUsers', users: [...usersArray] }));
             }
         });
-
-        
-    })
+    }
 })
 
 async function authenticateToken(req, res, next) {
