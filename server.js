@@ -25,6 +25,7 @@ const pool = mysql.createPool({
     queueLimit: 0
 }); 
 
+
 const query = (sql, values) => {
     return new Promise((resolve, reject) => {
         pool.query(sql, values, (error, results, fields) => {
@@ -46,7 +47,7 @@ passport.deserializeUser((user, done) => {
 
 // Initiate Strategy
 passport.use(new SteamStrategy({
-    returnURL: `https://${config.hostname}:${config.port}/api/auth/steam/return`,
+    returnURL: `https://localhost:${config.port}/api/auth/steam/return`,
     realm: `https://${config.hostname}:${config.port}/`,
     apiKey: config.apiKey
     }, function (identifier, profile, done) {
@@ -86,7 +87,7 @@ const server = https.createServer({
 
 const wss = new WebSocket.Server({ server });
 
-const activeUsers = new Set();
+const activeUsers = new Map();
 
 wss.on('connection', function connection(ws) {
     ws.isClosing = false;
@@ -96,17 +97,12 @@ wss.on('connection', function connection(ws) {
         const b = Buffer.from(data);
         const obj = JSON.parse(b.toString());
 
-        if (obj.action === 'pre_logout') {
+        if (obj.action === 'logout') {
             ws.isClosing = true;
             ws.closingSteamID = obj.steamid;
         }
 
-        // Отправка текущего списка пользователей в сети новому клиенту
-        if (obj.action.steamid != null) {
-            activeUsers.add(obj.action.steamid); // Добавляем пользователя в список активных
-            broadcastActiveUsers(); // Отправляем обновленный список всем пользователям
-        }
-
+        //отправка сообщений на сторону клиента и в базу данных для сохранения истории сообщений
         if(obj.action == null) {
             // Сохраняем сообщение в базу данных один раз
             try {
@@ -126,12 +122,32 @@ wss.on('connection', function connection(ws) {
                 }
             });
         }
+
+        // Отправка текущего списка пользователей в сети новому клиенту
+        if (obj.action != null && obj.action.steamid != null) {
+            // Функция для обработки данных пользователя
+            function handleUserAction() {
+                let steamid = obj.action.steamid;
+                const userInfo = {
+                    "nickname": obj.action.nickname,
+                    "img": obj.action.img
+                };
+            
+                // Обновляем данные пользователя, если он уже существует,
+                // или добавляем нового пользователя, если его нет в списке
+                activeUsers.set(steamid, userInfo);
+            }
+            
+            // Пример использования функции
+            handleUserAction();
+            broadcastActiveUsers(); // Отправляем обновленный список всем пользователям
+        }
        
     });
 
     ws.on('close', function() {
         if (ws.isClosing) {
-            console.log(`Пользователь с SteamID ${ws.closingSteamID} закрывает соединение`);
+            // console.log(`Пользователь с SteamID ${ws.closingSteamID} закрывает соединение`);
             if(ws.closingSteamID != null){
                 activeUsers.delete(ws.closingSteamID);
                 broadcastActiveUsers();
@@ -143,7 +159,14 @@ wss.on('connection', function connection(ws) {
         // Формируем список активных пользователей и отправляем его всем подключенным клиентам
         wss.clients.forEach(function each(client) {
             if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ action: 'updateUsers', users: Array.from(activeUsers) }));
+                //создаём массив из пользователей
+                const usersArray = Array.from(activeUsers).map(([steamid, userInfo]) => [steamid, userInfo]);
+
+                // Сортируем по никнейму
+                usersArray.sort((a, b) => a[1].nickname.localeCompare(b[1].nickname));
+
+                // Отправляем отсортированный массив клиенту
+                client.send(JSON.stringify({ action: 'updateUsers', users: [...usersArray] }));
             }
         });
     }

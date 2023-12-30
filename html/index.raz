@@ -14,6 +14,9 @@
 
 <body>
     <style>
+        body{
+            font-family: sans-serif;
+        }
         .message {
             display: flex;
             flex-direction: row;
@@ -24,6 +27,34 @@
             text-decoration: none;
             color: black;
             margin-left: 15px;
+        }
+        .chat{
+            width: 70%;
+            display: flex;
+            flex-direction: column;
+        }
+        .container{
+            display: flex;
+            flex-direction: row;
+
+        }
+        .list{
+            display: flex;
+            flex-direction: column;
+            align-items: baseline;
+            padding-left: 25px;
+            gap: 20px;
+        }
+        .list .user{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 19px;
+        }
+        .list .user img{
+            width: 55px;
+            border-radius: 15px;
         }
     </style>
 
@@ -51,17 +82,29 @@
         }
     </div>
 
-    <div>
-        <h1>Чат в онлайн режиме</h1>
-        <pre id="messages" style="height: 400px;overflow-y: scroll;display: flex;flex-direction: column;gap: 20px;"></pre>
-            @if(steam != null) {
-                <input type="text" id="messageBox" placeholder="Пишите ваше сообщение здесь"
-                style="display: block; width: 96vw; margin-bottom: 10px; padding: 10px;" />
-                <button id="send" title="Отправить сообщение!" style="width: 100%; height: 30px;">Отправить сообщение</button>
-            }else{
-                <a href="https://localhost:3000/api/auth/steam" style="display: inline-block; width: 100%; height: 30px; text-align: center;">Авторизуйтесь через Steam чтобы написать сообщение</a>
-            }
+    <div class="container">
+        <div class="chat">
+            <h1>Чат в онлайн режиме</h1>
+            <pre id="messages" style="height: 400px;overflow-y: scroll;display: flex;flex-direction: column;gap: 20px;"></pre>
+                @if(steam != null) {
+                    <input type="text" id="messageBox" placeholder="Пишите ваше сообщение здесь"
+                    style="display: block; width:98%; margin-bottom: 10px; padding: 10px;" />
+                    <button id="send" title="Отправить сообщение!" style="width: 100%; height: 30px;">Отправить сообщение</button>
+                }else{
+                    <a href="https://localhost:3000/api/auth/steam" style="display: inline-block; width: 100%; height: 30px; text-align: center;">Авторизуйтесь через Steam чтобы написать сообщение</a>
+                }
+        </div>
+        <div class="onlineStatus">
+            <h1>Кто онлайн</h1>
+            <div id="list" class="list">
+                
+            </div>
+        </div>
     </div>
+    
+
+
+
     @if(history != null){
     <script>
         const sendBtn = document.querySelector('#send');
@@ -99,19 +142,43 @@
             function showMessage(data) {
                 // console.log(data);
                 data = JSON.parse(data);
-                if (data.steamid != undefined) {
-                    let nickname = data.nickname;
-                    let img = data.img;
-                    let message = data.messages;
-                    messages.innerHTML += `<div class="message"><img width="50px" style="border-radius: 15px" src="${img}" alt="${nickname}"> <a class="nickname" href="https://steamcommunity.com/id/${nickname}">${nickname}</a>: ${message}</div>`;
-                    messages.scrollTop = messages.scrollHeight;
-                    messageBox.value = '';
-                }
+                // if (data.steamid != undefined) {
+                let nickname = data.nickname;
+                let img = data.img;
+                let message = data.messages;
+                messages.innerHTML += `<div class="message"><img width="50px" style="border-radius: 15px" src="${img}" alt="${nickname}"> <a class="nickname" href="https://steamcommunity.com/id/${nickname}">${nickname}</a>: ${message}</div>`;
+                messages.scrollTop = messages.scrollHeight;
+                messageBox.value = '';
+                // }
                 
             }
 
-            
+            const list = document.querySelector('#list');
 
+            function updateOnlineStatus(data) {
+                data = JSON.parse(data);
+
+                list.textContent = '';
+
+                for (let i = 0; i < data.users.length; i++) {
+                    const userId = data.users[i][0];
+                    let userElement = document.getElementById(userId);
+
+                    if (!userElement) {
+                        // Если нет, создаем новый элемент
+                        userElement = document.createElement('div');
+                        userElement.className = 'user';
+                        userElement.id = userId;
+                        userElement.innerHTML = `<img src="${data.users[i][1].img}" alt="${data.users[i][1].nickname}">${data.users[i][1].nickname}`;
+
+                        list.appendChild(userElement);
+                    } else {
+                        userElement.innerHTML = `<img src="${data.users[i][1].img}" alt="${data.users[i][1].nickname}">${data.users[i][1].nickname}`;
+                    }
+            
+                }
+            }
+            
             function getCookie(cName) {
                 const name = cName + "=";
                 const cDecoded = decodeURIComponent(document.cookie); //to be careful
@@ -134,13 +201,19 @@
                     console.log('Connection opened!');
                     ws.send(JSON.stringify({
                         "action": {
-                            "steamid": '@steam.steamid'
+                            "steamid": '@steam.steamid',
+                            "nickname": '@steam.personaname',
+                            "img": '@steam.avatarfull'
                         }
                     }));
                 }
                 ws.onmessage = ({ data }) => {
-                    console.log(data);
-                    showMessage(data);
+                    let status = JSON.parse(data);
+                    if(status.action == 'updateUsers'){
+                        updateOnlineStatus(data);
+                    }else{
+                        showMessage(data);
+                    }
                 };
                 ws.onclose = () => {
                     ws = null;
@@ -168,7 +241,8 @@
 
             window.addEventListener("beforeunload", function(event) {
                 if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ action: "pre_logout", steamid: '@steam.steamid' }));
+                    ws.send(JSON.stringify({ action: "logout", steamid: '@steam.steamid' }));
+                    
                 }
             });
 
