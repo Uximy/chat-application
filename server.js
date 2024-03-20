@@ -17,9 +17,9 @@ const config = require('./config.json');
 
 const pool = mysql.createPool({
     host: "localhost",
-    user: "root",
-    database: "chatDB",
-    password: "",
+    user: config.database.username,
+    database: config.database.baseName,
+    password: config.database.password,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
