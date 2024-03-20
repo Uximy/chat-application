@@ -1,5 +1,10 @@
 {
     "hostname": "localhost",
     "port": 3000,
-    "apiKey": "APIKEY"
+    "apiKey": "apiKey",
+    "database": {
+        "baseName": "baseName",
+        "username": "username",
+        "password": "password"
+    }
 }
